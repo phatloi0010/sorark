@@ -76,6 +76,77 @@ fn cli_diff_catches_storage_and_abi_breakages_between_v1_and_v2_examples() {
 }
 
 #[test]
+fn cli_inspect_markdown_format_renders_tables() {
+    let tmp = tempfile::tempdir().unwrap();
+    let wasm_path = tmp.path().join("contract.wasm");
+
+    let struct_entry = ScSpecEntry::UdtStructV0(ScSpecUdtStructV0 {
+        doc: StringM::default(),
+        lib: StringM::default(),
+        name: StringM::try_from("VaultConfig").unwrap(),
+        fields: VecM::try_from(vec![
+            ScSpecUdtStructFieldV0 {
+                doc: StringM::default(),
+                name: StringM::try_from("admin").unwrap(),
+                type_: ScSpecTypeDef::Address,
+            },
+            ScSpecUdtStructFieldV0 {
+                doc: StringM::default(),
+                name: StringM::try_from("shares").unwrap(),
+                type_: ScSpecTypeDef::I128,
+            },
+        ])
+        .unwrap(),
+    });
+
+    std::fs::write(
+        &wasm_path,
+        encode_soroban_wasm_with_specs(22, &[struct_entry]).unwrap(),
+    )
+    .unwrap();
+
+    let output = Command::new(sorark_bin())
+        .args([
+            "inspect",
+            wasm_path.to_str().unwrap(),
+            "--format",
+            "markdown",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Verify Markdown headers and table markers
+    assert!(
+        stdout.contains("# SORARK WASM Contract Inspection:"),
+        "stdout: {stdout}"
+    );
+    assert!(stdout.contains("## Binary Metrics"), "stdout: {stdout}");
+    assert!(
+        stdout.contains("| Metric | Value | Details |"),
+        "stdout: {stdout}"
+    );
+    assert!(
+        stdout.contains("| :--- | :--- | :--- |"),
+        "stdout: {stdout}"
+    );
+    assert!(stdout.contains("**Binary Size**"), "stdout: {stdout}");
+    assert!(stdout.contains("**Soroban Protocol**"), "stdout: {stdout}");
+
+    // Verify struct table
+    assert!(
+        stdout.contains("## #[contracttype] Named Structs (ScMap)"),
+        "stdout: {stdout}"
+    );
+    assert!(stdout.contains("| Struct | Fields |"), "stdout: {stdout}");
+    assert!(stdout.contains("`VaultConfig`"), "stdout: {stdout}");
+    assert!(stdout.contains("`admin: Address`"), "stdout: {stdout}");
+    assert!(stdout.contains("`shares: i128`"), "stdout: {stdout}");
+}
+
+#[test]
 fn cli_sarif_and_wasm_binary_diff_work_end_to_end() {
     let tmp = tempfile::tempdir().unwrap();
     let v1_wasm_path = tmp.path().join("v1.wasm");
